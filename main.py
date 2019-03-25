@@ -2,17 +2,18 @@ import numpy as np
 import cv2 as cv
 
 
-def transformToPoints(bboxes):
+def transform_to_points(bboxes):
     bboxesPuntos = []
 
     for b in bboxes:
-        bboxesPuntos.append(getFormattedPoint(b))
+        bboxesPuntos.append(get_formatted_point(b))
 
     return bboxesPuntos
 
-def getFormattedPoint(oldFormatRectangle):
+def get_formatted_point(oldFormatRectangle):
 
     # Creamos los puntos con los datos obtenidos de los bboxes en formato [x ,y , ancho, alto]
+
     coord_x = oldFormatRectangle[0]
     coord_y = oldFormatRectangle[1]
     ancho = oldFormatRectangle[2]
@@ -25,6 +26,7 @@ def getFormattedPoint(oldFormatRectangle):
 
     # ampliamos area del cuadrado (disminuimos la x e y del primer punto y aumentamos ancho y alto)
     # la coordenada y es positiva hacia abajo (al reves de como suele ser normalmente)
+
     ampliacion = ancho/5 # expandimos el bbox 1/5 de su tamanio original
 
     # punto superior izquierdo
@@ -45,14 +47,18 @@ def getFormattedPoint(oldFormatRectangle):
 
     return np.array([point1, point2, point3, point4], dtype=np.int32)
 
-def filterSquares(bboxes):
+def filter_squares(bboxes):
+
     # Filtramos las bboxes que menos se parezcan a un cuadrado, porque el ratio en un cuadrado ancho/alto es 1
-    minRatioSquare = 0.75
-    bboxesPuntosFiltered = []
+
+    min_ratio_square = 0.75
+    bboxes_puntos_filtered = []
+
     for b in bboxes:
-        if b[2] / b[3] > minRatioSquare and b[3] / b[2] > minRatioSquare:
-            bboxesPuntosFiltered.append(getFormattedPoint(b))
-    return bboxesPuntosFiltered
+        if b[2] / b[3] > min_ratio_square and b[3] / b[2] > min_ratio_square:
+            bboxes_puntos_filtered.append(get_formatted_point(b))
+
+    return bboxes_puntos_filtered
 
 
 # mser = cv.MSER_create()
@@ -78,7 +84,7 @@ while True:
     # con reshape, cambiamos las dimensiones de la matriz sin alterar su contenido
     # hulls = [cv.convexHull(p.reshape(-1, 1, 2)) for p in regions]
 
-    hulls = [cv.convexHull(p.reshape(-1, 1, 2)) for p in filterSquares(bboxes)]
+    hulls = [cv.convexHull(p.reshape(-1, 1, 2)) for p in filter_squares(bboxes)]
 
     cv.polylines(imgCopy, hulls, 1, (0, 255, 0))
 
