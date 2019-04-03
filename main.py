@@ -1,5 +1,7 @@
 import numpy as np
 import cv2 as cv
+import math
+import os
 
 
 def transform_to_points(bboxes):
@@ -9,6 +11,7 @@ def transform_to_points(bboxes):
         bboxesPuntos.append(get_formatted_point(b))
 
     return bboxesPuntos
+
 
 def get_formatted_point(oldFormatRectangle):
 
@@ -27,7 +30,7 @@ def get_formatted_point(oldFormatRectangle):
     # ampliamos area del cuadrado (disminuimos la x e y del primer punto y aumentamos ancho y alto)
     # la coordenada y es positiva hacia abajo (al reves de como suele ser normalmente)
 
-    ampliacion = ancho/5 # expandimos el bbox 1/5 de su tamanio original
+    ampliacion = ancho/8 # expandimos el bbox 1/8 de su tamanio original
 
     # punto superior izquierdo
     point1[0] = point1[0] - ampliacion
@@ -47,6 +50,7 @@ def get_formatted_point(oldFormatRectangle):
 
     return np.array([point1, point2, point3, point4], dtype=np.int32)
 
+
 def filter_squares(bboxes):
 
     # Filtramos las bboxes que menos se parezcan a un cuadrado, porque el ratio en un cuadrado ancho/alto es 1
@@ -61,6 +65,36 @@ def filter_squares(bboxes):
     return bboxes_puntos_filtered
 
 
+def distance_between_points(p1_x, p1_y, p2_x, p2_y):
+    return math.sqrt((p2_x - p1_x) ** 2 + (p2_y - p1_y) ** 2)
+
+
+def save_rois(bboxes, img):
+
+    for b in bboxes:
+        roi = img[b[0, 1]:b[3, 1], b[1, 0]:b[2, 0]]
+        # cv.rectangle(img, (b[0, 0], b[0, 1]), (b[2, 0], b[2, 1]), (0, 255, 0), 1)
+
+    # cv.imshow('marked areas', img)
+
+
+def resize_img_25_25(img):
+    return cv.resize(img, (25, 25))
+
+
+def create_mask(img, lower_bound, upper_bound):
+    # return cv.bitwise_not(cv.inRange(img, lower_bound, upper_bound))
+    return cv.inRange(img, lower_bound, upper_bound)
+
+def correlate_masks(mask1, mask2):
+    # multiplicamos todos los pixeles de las dos matrices y sumamos
+    correlation_matrix = np.multiply(mask1, mask2)
+    correlation = 0
+    for row in correlation_matrix:
+        for elem in row:
+            correlation += elem
+    return correlation
+
 # mser = cv.MSER_create()
 
 # Orden de los parametros del constructor
@@ -68,27 +102,115 @@ def filter_squares(bboxes):
 #       _max_variation, _min_diversity,
 #       _max_evolution, _area_threshold,
 #       _min_margin, _edge_blur_size
-mser = cv.MSER_create(3, 100, 2000, 0.3, 1.0, 200, 1.01, 0.003, 0)
+mser = cv.MSER_create(2, 100, 2000, 0.05, 1.0, 200, 1.01, 0.003, 0)
 
 while True:
 
-    # Cargamos la imagen en escala de grises
-    img = cv.imread('train_10_ejemplos/00001.ppm', cv.IMREAD_GRAYSCALE)
+    # Cargamos la imagen en color
+    img = cv.imread('train_10_ejemplos/00000.ppm', 1)
 
     imgCopy = img.copy()
+    imgGray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
+
 
     # Guardamos las Bounding Boxes de la imagen -> (x1,y1) y ancho y alto
-    regions, bboxes = mser.detectRegions(imgCopy)
+    regions, bboxes = mser.detectRegions(imgGray)
 
     # hulls son todos los contornos, y convexHull nos da el contorno cerrado de una region convexa
     # con reshape, cambiamos las dimensiones de la matriz sin alterar su contenido
-    # hulls = [cv.convexHull(p.reshape(-1, 1, 2)) for p in regions]
 
-    hulls = [cv.convexHull(p.reshape(-1, 1, 2)) for p in filter_squares(bboxes)]
+    filtered_bboxes = filter_squares(bboxes)
+    hulls = [cv.convexHull(p.reshape(-1, 1, 2)) for p in filtered_bboxes]
 
-    cv.polylines(imgCopy, hulls, 1, (0, 255, 0))
+    cv.polylines(imgGray, hulls, 1, (0, 255, 0))
 
-    cv.imshow('img', imgCopy)
+    # Guardamos los ROIs detectados, para su posterior filtrado
+    # save_rois(filtered_bboxes, imgCopy)
+
+    """
+    Punto 2: 
+    Utilizar el espacio de color HSV para localizar los píxeles que sean de color rojo. Creacion de mascaras
+    para cada tipo de señal (prohibicion, peligro y stop)
+    """
+
+    # Creamos una mascara para señales con una imagen intermedia
+    img_intermedia_prohibicion = cv.imread("train_recortadas/01/00016.ppm")
+    img_intermedia_peligro = cv.imread("train_recortadas/11/00021.ppm")
+    img_intermedia_stop = cv.imread("train_recortadas/14/00015.ppm")
+
+    # Pasamos espacio de colores a HSV para detectar rojos
+    img_intermedia_prohibicion_copy = cv.cvtColor(img_intermedia_prohibicion, cv.COLOR_BGR2HSV)
+    img_intermedia_peligro_copy = cv.cvtColor(img_intermedia_peligro, cv.COLOR_BGR2HSV)
+    img_intermedia_stop_copy = cv.cvtColor(img_intermedia_stop, cv.COLOR_BGR2HSV)
+
+
+
+    # Creamos la mascara de señal de prohibicion (detectamos el rojo)
+    lower_red_prohibicion = np.array([0, 114, 0], np.uint8)
+    upper_red_prohibicion = np.array([255, 255, 255], np.uint8)
+    img_intermedia_prohibicion_copy = resize_img_25_25(img_intermedia_prohibicion_copy)
+    mask_prohibicion = create_mask(img_intermedia_prohibicion_copy, lower_red_prohibicion, upper_red_prohibicion)
+
+
+
+    # Creamos la mascara de señal de peligro (detectamos el rojo)
+    # HSV [Hue, Sat, Value]
+    lower_red_peligro = np.array([0, 130, 0], np.uint8)
+    upper_red_peligro = np.array([255, 255, 255], np.uint8)
+    img_intermedia_peligro_copy = resize_img_25_25(img_intermedia_peligro_copy)
+    mask_peligro = create_mask(img_intermedia_peligro_copy, lower_red_peligro, upper_red_peligro)
+
+    # Creamos la mascara de señal de stop (detectamos el blanco)
+    lower_red_stop = np.array([55, 59, 0], np.uint8)
+    upper_red_stop = np.array([255, 255, 255], np.uint8)
+    img_intermedia_stop_copy = resize_img_25_25(img_intermedia_stop_copy)
+    mask_stop = create_mask(img_intermedia_stop_copy, lower_red_stop, upper_red_stop)
+
+    # result = cv.bitwise_and(img_intermedia_stop_copy, img_intermedia_stop_copy, mask=mask_stop)
+    # cv.imshow('mask', mask_stop)
+    # cv.imshow('result', result)
+
+    """
+    Punto 3: 
+    Deteccion mediante correlacion de máscaras
+    """
+
+    img_path_directory = "./recortes_prueba/"
+    extensions = ['jpg', 'png', 'bmp', 'jpeg', 'ppm']
+    file_names = [file for file in os.listdir(img_path_directory) if any(file.endswith(extension) for extension in extensions)]
+    print(file_names)
+
+    # correlamos cada recorte
+    for im in file_names:
+        print(img_path_directory + im)
+        signal_img = cv.imread(img_path_directory + im, 1)
+        signal_img = cv.cvtColor(signal_img, cv.COLOR_BGR2HSV)
+        signal_img = resize_img_25_25(signal_img)
+        signal_mask_prohibicion = create_mask(signal_img, lower_red_prohibicion, upper_red_prohibicion)
+        signal_mask_peligro = create_mask(signal_img, lower_red_peligro, upper_red_peligro)
+        signal_mask_stop = create_mask(signal_img, lower_red_stop, upper_red_stop)
+
+        cv.imshow('real', signal_img)
+        cv.imshow('default_peligro', mask_peligro)
+        cv.imshow('signal_mask_prohibicion', signal_mask_prohibicion)
+        cv.imshow('signal_mask_peligro', signal_mask_peligro)
+        cv.imshow('signal_mask_stop', signal_mask_stop)
+
+
+        # cv.imshow('signal_mask_prohib', signal_mask_prohibicion)
+
+        # Correlamos con señal de prohibicion
+        corr_prohibicion = correlate_masks(mask_prohibicion, signal_mask_prohibicion)
+        corr_peligro = correlate_masks(mask_peligro, signal_mask_peligro)
+        corr_stop = correlate_masks(mask_stop, signal_mask_stop)
+        print(im + "(prohibicion): " + str(corr_prohibicion))
+        print(im + "(peligro): " + str(corr_peligro))
+        print(im + "(stop): " + str(corr_stop))
+        print("----------")
+
+
+
+    # cv.imshow('img', imgGray)
 
     # Cerramos la ventana presionando escape
     if cv.waitKey(5) == 27:
