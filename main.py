@@ -84,7 +84,8 @@ def resize_img_25_25(img):
 
 def create_mask(img, lower_bound, upper_bound):
     # return cv.bitwise_not(cv.inRange(img, lower_bound, upper_bound))
-    return cv.inRange(img, lower_bound, upper_bound)
+    mask = cv.inRange(img, lower_bound, upper_bound)
+    return mask
 
 def correlate_masks(mask1, mask2):
     # multiplicamos todos los pixeles de las dos matrices y sumamos
@@ -94,6 +95,7 @@ def correlate_masks(mask1, mask2):
         for elem in row:
             correlation += elem
     return correlation
+
 def train():
     """
      Punto 2: 
@@ -101,58 +103,73 @@ def train():
     para cada tipo de señal (prohibicion, peligro y stop)
     """
     directory_path_directory = "./train_recortadas/"
-    file_names = [file for file in os.listdir(directory_path_directory) ]
+    file_names = [file for file in os.listdir(directory_path_directory) if not file.endswith(".DS_Store")]
     prohibiciones=[ "00", "01", "02", "03", "04", "05", "07", "08", "09", "10", "15", "16"]
     peligros=["11", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31"]
     stops= ["14"]
+    mask_prohibicion = np.zeros((25, 25))
+
+    mask_peligro = np.zeros((25, 25))
+
+    mask_stop = np.zeros((25, 25))
+    masks = []
+
+    lower_red_prohibicion = np.array([0, 160, 100])
+    upper_red_prohibicion = np.array([10, 255, 255])
+
+    lower_red_peligro = np.array([7, 0, 0])
+    upper_red_peligro = np.array([173, 255, 255])
+
+    lower_red_stop = np.array([55, 59, 0])
+    upper_red_stop = np.array([255, 255, 255])
+
+    n_prohibidos = 0
+    n_peligros = 0
+    n_stops = 0
+
     for fi in file_names:
         img_path_directory = "./train_recortadas/"+fi
-        file_images= [file for file in os.listdir(img_path_directory) ]
-        mask_prohibicion=np.zeros( (25,25) )
+        file_images = [file for file in os.listdir(img_path_directory)]
 
-        mask_peligro=np.zeros( (25,25) )
-
-        mask_stop=np.zeros( (25,25) )
-        masks=[]
         for im in file_images:
-            # Creamos una mascara para señales con una imagen intermedia
-            
-           
-           
-        
-            # Pasamos espacio de colores a HSV para detectar rojos
-            
-           
-            
-        
-        
+
             if (fi in prohibiciones):
                 # Creamos la mascara de señal de prohibicion (detectamos el rojo)
-                img_intermedia_prohibicion = cv.imread(img_path_directory +"/"+im)
+                img_intermedia_prohibicion = cv.imread(img_path_directory + "/" + im)
+                cv.imshow("a", img_intermedia_prohibicion)
                 img_intermedia_prohibicion_copy = cv.cvtColor(img_intermedia_prohibicion, cv.COLOR_BGR2HSV)
-                lower_red_prohibicion = np.array([0, 114, 0], np.uint8)
-                upper_red_prohibicion = np.array([255, 255, 255], np.uint8)
                 img_intermedia_prohibicion_copy = resize_img_25_25(img_intermedia_prohibicion_copy)
-                mask_prohibicion = np.add(mask_prohibicion,create_mask(img_intermedia_prohibicion_copy, lower_red_prohibicion, upper_red_prohibicion))
-                
+
+                mask_nueva = create_mask(img_intermedia_prohibicion_copy, lower_red_prohibicion, upper_red_prohibicion)
+                print(mask_nueva)
+                mask_prohibicion = np.add(mask_prohibicion, mask_nueva)
+                n_prohibidos += 1
         
             if (fi in peligros):
                 # Creamos la mascara de señal de peligro (detectamos el rojo)
                 # HSV [Hue, Sat, Value]
-                img_intermedia_peligro = cv.imread(img_path_directory +"/"+im)
-                img_intermedia_peligro_copy = cv.cvtColor(img_intermedia_peligro, cv.COLOR_BGR2HSV) 
-                lower_red_peligro = np.array([0, 130, 0], np.uint8)
-                upper_red_peligro = np.array([255, 255, 255], np.uint8)
+                img_intermedia_peligro = cv.imread(img_path_directory + "/" +im).astype(np.float32)
+                img_intermedia_peligro_copy = cv.cvtColor(img_intermedia_peligro, cv.COLOR_BGR2HSV)
                 img_intermedia_peligro_copy = resize_img_25_25(img_intermedia_peligro_copy)
-                mask_peligro =np.add(mask_prohibicion, create_mask(img_intermedia_peligro_copy, lower_red_peligro, upper_red_peligro))
+                mask_peligro = np.add(mask_prohibicion, create_mask(img_intermedia_peligro_copy, lower_red_peligro, upper_red_peligro))
+                n_peligros += 1
+
             if (fi in stops):   
                 # Creamos la mascara de señal de stop (detectamos el blanco)
-                img_intermedia_stop = cv.imread(img_path_directory +"/"+im)
+                img_intermedia_stop = cv.imread(img_path_directory + "/" + im).astype(np.float32)
                 img_intermedia_stop_copy = cv.cvtColor(img_intermedia_stop, cv.COLOR_BGR2HSV)
-                lower_red_stop = np.array([55, 59, 0], np.uint8)
-                upper_red_stop = np.array([255, 255, 255], np.uint8)
                 img_intermedia_stop_copy = resize_img_25_25(img_intermedia_stop_copy)
-                mask_stop =np.add(mask_prohibicion, create_mask(img_intermedia_stop_copy, lower_red_stop, upper_red_stop))
+                mask_stop = np.add(mask_prohibicion, create_mask(img_intermedia_stop_copy, lower_red_stop, upper_red_stop))
+                n_stops += 1
+
+    mask_prohibicion = np.divide(mask_prohibicion, n_prohibidos)
+    mask_peligro = np.divide(mask_peligro, n_peligros)
+    mask_stop = np.divide(mask_stop, n_stops)
+
+    cv.imshow("mask intermedia prohibicion", mask_prohibicion)
+    cv.imshow("mask intermedia peligro", mask_peligro)
+    cv.imshow("mask intermedia stop", mask_stop)
+
     masks.append(mask_prohibicion)
     masks.append(mask_peligro)
     masks.append(mask_stop)
@@ -221,11 +238,13 @@ while True:
         signal_mask_peligro = create_mask(signal_img, lower_red_peligro, upper_red_peligro)
         signal_mask_stop = create_mask(signal_img, lower_red_stop, upper_red_stop)
 
+        """
         cv.imshow('real', signal_img)
         cv.imshow('default_peligro', masks[1])
         cv.imshow('signal_mask_prohibicion', signal_mask_prohibicion)
         cv.imshow('signal_mask_peligro', signal_mask_peligro)
         cv.imshow('signal_mask_stop', signal_mask_stop)
+        """
 
 
         # cv.imshow('signal_mask_prohib', signal_mask_prohibicion)
