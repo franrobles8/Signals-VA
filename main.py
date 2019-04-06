@@ -89,30 +89,36 @@ def create_mask(img, lower_bound, upper_bound):
 
                
 def correlate_masks(mask1, mask2):
-    size=mask_size(mask1)
-    print(size)
+    # size = mask_size(mask1)
+    # print(size)
     # multiplicamos todos los pixeles de las dos matrices y sumamos
     """
     correlation_matrix = np.multiply(mask1, mask2)
     """
-    contador=0
+
+    # Hallamos el numero de pixeles blancos en la mascara media
+
+    n_pixeles_blancos_m_media = 0
+
+    for idx, row in enumerate(mask1):
+        for idy, elem in enumerate(row):
+            if mask2[idx, idy] == 255:
+                n_pixeles_blancos_m_media += 1
+
+    # Hallamos el numero de pixeles que coinciden en las dos mascaras
+
     correlation = 0
     
     for idx, row in enumerate(mask1):
-        for idy,elem in enumerate(row):
-            
-            
-               
-            """
-            contador+=1"""
-            if(mask1[idx][idy]==mask2[idx][idy]):
-                
+        for idy, elem in enumerate(row):
+            if (mask1[idx, idy] == 255) & (mask2[idx, idy] == 255):
                 correlation += 1
             
     print(correlation)
-    print(size)
+    # print(size)
     
-    return correlation/(25*25)
+    # return correlation/(25*25)
+    return correlation/n_pixeles_blancos_m_media
 
 def filter_black_white(old_mask, umbral):
     new_mask = []
@@ -126,6 +132,53 @@ def filter_black_white(old_mask, umbral):
                 new_row.append(255)
         new_mask.append(new_row)
     return np.array(new_mask, np.float32)
+
+def get_mean_image_masks():
+    directory_path_directory = "./train_recortadas/"
+    file_names = [file for file in os.listdir(directory_path_directory) if not file.endswith(".DS_Store")]
+    prohibiciones = ["00", "01", "02", "03", "04", "05", "07", "08", "09", "10", "15", "16"]
+    peligros = ["11", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31"]
+    stops = ["14"]
+
+    mean_image_prohibicion = np.zeros((25, 25, 3), dtype=np.int32)
+    mean_image_peligro = np.zeros((25, 25, 3), dtype=np.int32)
+    mean_image_stop = np.zeros((25, 25, 3), dtype=np.int32)
+
+    n_prohibiciones = 0
+    n_peligros = 0
+    n_stops = 0
+
+    for fi in file_names:
+        img_path_directory = "./train_recortadas/"+fi
+        file_images = [file for file in os.listdir(img_path_directory)]
+
+        for im in file_images:
+
+            if (fi in prohibiciones):
+                img_prohibicion = cv.imread(img_path_directory + "/" + im)
+                img_prohibicion = resize_img_25_25(img_prohibicion)
+                mean_image_prohibicion = np.add(mean_image_prohibicion, img_prohibicion)
+                n_prohibiciones += 1
+
+            if (fi in peligros):
+                img_peligro = cv.imread(img_path_directory + "/" + im)
+                img_peligro = resize_img_25_25(img_peligro)
+                mean_image_peligro = np.add(mean_image_peligro, img_peligro)
+                n_peligros += 1
+            if (fi in stops):
+                img_stop = cv.imread(img_path_directory + "/" + im)
+                img_stop = resize_img_25_25(img_stop)
+                mean_image_stop = np.add(mean_image_stop, img_stop)
+                n_stops += 1
+
+    cv.imshow("mean prohibicion", mean_image_prohibicion)
+    cv.imshow("mean peligro", mean_image_peligro)
+    cv.imshow("mean stop", mean_image_stop)
+
+def write_signal_to_results(str_signal):
+    f = open("resultado.txt", "a+")
+    f.write(str_signal + "\n")
+    f.close()
 
 def train():
     """
@@ -196,7 +249,7 @@ def train():
                 mask_peligro = np.add(mask_peligro, create_mask(img_intermedia_peligro_copy, lower_red_peligro, upper_red_peligro))
                 n_peligros += 1
             if (fi in stops):   
-                # Creamos la mascara de señal de stop (detectamos el blanco)
+                # Creamos la mascara de señal de stop (detectamos el rojo)
                 img_intermedia_stop = cv.imread(img_path_directory + "/" + im)
                 img_intermedia_stop_copy = cv.cvtColor(img_intermedia_stop, cv.COLOR_BGR2HSV)
                 img_intermedia_stop_copy = resize_img_25_25(img_intermedia_stop_copy)
@@ -216,17 +269,24 @@ def train():
 
     mask_stop = np.divide(mask_stop, n_stops)
     mask_stop = filter_black_white(mask_stop, 2)
+
     """
     mask_stop = filter_black_white(mask_stop, 2).astype(np.uint8)
     cv.imshow("mask intermedia prohibicion", mask_prohibicion.astype(np.uint8))
     cv.imshow("mask intermedia peligro", mask_peligro.astype(np.uint8))
-    cv.imshow("mask intermedia stop", mask_stop.astype(np.uint8))"""
+    cv.imshow("mask intermedia stop", mask_stop.astype(np.uint8))
+    """
     
     masks.append(mask_prohibicion)
     masks.append(mask_peligro)
     masks.append(mask_stop)
     return masks
-# mser = cv.MSER_create()
+
+
+
+# Creamos un nuevo fichero resultado.txt
+f = open("resultado.txt", "w")
+f.close()
 
 # Orden de los parametros del constructor
 #       _delta,_min_area,_max_area,
@@ -236,6 +296,8 @@ def train():
 mser = cv.MSER_create(2, 100, 2000, 0.05, 1.0, 200, 1.01, 0.003, 0)
 """"""
 while True:
+
+    # get_mean_image_masks()
 
     # Cargamos la imagen en color
     img = cv.imread('train/00000.ppm', 1)
@@ -335,9 +397,17 @@ while True:
         # cv.imshow('signal_mask_prohib', signal_mask_prohibicion)
     
         # Correlamos con señal de prohibicion
-        corr_prohibicion = correlate_masks(masks[0], signal_mask_prohibicion)
-        corr_peligro = correlate_masks(masks[1], signal_mask_peligro)
-        corr_stop = correlate_masks(masks[2], signal_mask_stop)
+        corr_prohibicion = correlate_masks(signal_mask_prohibicion, masks[0])
+        corr_peligro = correlate_masks(signal_mask_peligro, masks[1])
+        corr_stop = correlate_masks(signal_mask_stop, masks[2])
+
+        if (corr_prohibicion > corr_peligro) & (corr_prohibicion > corr_stop):
+            write_signal_to_results(str(im) + ";" + "0" + ";" + str(corr_prohibicion))
+        elif (corr_peligro > corr_prohibicion) & (corr_peligro > corr_stop):
+            write_signal_to_results(str(im) + ";" + "1" + ";" + str(corr_prohibicion))
+        elif (corr_stop > corr_prohibicion) & (corr_stop > corr_peligro):
+            write_signal_to_results(str(im) + ";" + "2" + ";" + str(corr_prohibicion))
+
         print(im+ "(prohibicion): " + str(corr_prohibicion))
         print(im+"(peligro): " + str(corr_peligro))
         print(im+"(stop): " + str(corr_stop))
