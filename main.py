@@ -33,10 +33,10 @@ def get_formatted_point(oldFormatRectangle):
     # ampliamos area del cuadrado (disminuimos la x e y del primer punto y aumentamos ancho y alto)
     # la coordenada y es positiva hacia abajo (al reves de como suele ser normalmente)
 
-    ampliacion = ancho*(1/3)# expandimos el bbox 1/8 de su tamanio original
+    ampliacion = ancho*(1/3)# expandimos el bbox 1/3 de su tamanio original
 
     # punto superior izquierdo
-    point1[0] = point1[0] #- ampliacion
+    point1[0] = point1[0] - ampliacion
     point1[1] = point1[1] - ampliacion
 
     # punto superior derecho
@@ -45,11 +45,11 @@ def get_formatted_point(oldFormatRectangle):
 
     # punto inferior derecho
     point3[0] = point3[0] + ampliacion
-    point3[1] = point3[1] #+ ampliacion
+    point3[1] = point3[1] + ampliacion
 
     # punto inferior izquierdo
-    point4[0] = point4[0] #- ampliacion
-    point4[1] = point4[1] #+ ampliacion
+    point4[0] = point4[0] - ampliacion
+    point4[1] = point4[1] + ampliacion
 
     return np.array([point1, point2, point3, point4], dtype=np.int32)
 
@@ -138,47 +138,6 @@ def filter_black_white(old_mask, umbral):
         new_mask.append(new_row)
     return np.array(new_mask, np.float32)
 
-def get_mean_image_masks():
-    directory_path_directory = "./train_recortadas/"
-    file_names = [file for file in os.listdir(directory_path_directory) if not file.endswith(".DS_Store")]
-    prohibiciones = ["00", "01", "02", "03", "04", "05", "07", "08", "09", "10", "15", "16"]
-    peligros = ["11", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31"]
-    stops = ["14"]
-
-    mean_image_prohibicion = np.zeros((25, 25, 3), dtype=np.int32)
-    mean_image_peligro = np.zeros((25, 25, 3), dtype=np.int32)
-    mean_image_stop = np.zeros((25, 25, 3), dtype=np.int32)
-
-    n_prohibiciones = 0
-    n_peligros = 0
-    n_stops = 0
-
-    for fi in file_names:
-        img_path_directory = "./train_recortadas/"+fi
-        file_images = [file for file in os.listdir(img_path_directory)]
-
-        for im in file_images:
-
-            if (fi in prohibiciones):
-                img_prohibicion = cv.imread(img_path_directory + "/" + im)
-                img_prohibicion = resize_img_25_25(img_prohibicion)
-                mean_image_prohibicion = np.add(mean_image_prohibicion, img_prohibicion)
-                n_prohibiciones += 1
-
-            if (fi in peligros):
-                img_peligro = cv.imread(img_path_directory + "/" + im)
-                img_peligro = resize_img_25_25(img_peligro)
-                mean_image_peligro = np.add(mean_image_peligro, img_peligro)
-                n_peligros += 1
-            if (fi in stops):
-                img_stop = cv.imread(img_path_directory + "/" + im)
-                img_stop = resize_img_25_25(img_stop)
-                mean_image_stop = np.add(mean_image_stop, img_stop)
-                n_stops += 1
-
-    cv.imshow("mean prohibicion", mean_image_prohibicion)
-    cv.imshow("mean peligro", mean_image_peligro)
-    cv.imshow("mean stop", mean_image_stop)
 
 def write_signal_to_results(str_signal):
     f = open("resultado.txt", "a+")
@@ -266,7 +225,7 @@ def train(train_directory):
                 esta=(tipo ==peligros[0])
                 if (tipo in prohibiciones):
                     # Creamos la mascara de señal de prohibicion (detectamos el rojo)
-                    img_intermedia_prohibicion = cv.imread(img_path_directory )
+                    img_intermedia_prohibicion = cv.imread(img_path_directory, 1)
                     
                     img_intermedia_prohibicion_copy=img_intermedia_prohibicion[y1:y2, x1:x2] 
                     
@@ -277,7 +236,7 @@ def train(train_directory):
                 if (tipo in peligros):
                     # Creamos la mascara de señal de peligro (detectamos el rojo)
                     # HSV [Hue, Sat, Value]
-                    img_intermedia_peligro = cv.imread(img_path_directory)
+                    img_intermedia_peligro = cv.imread(img_path_directory, 1)
                     
                     img_intermedia_peligro_copy=img_intermedia_peligro[y1:y2, x1:x2] 
                     
@@ -289,7 +248,7 @@ def train(train_directory):
                     n_peligros += 1
                 if (tipo in stops):   
                     # Creamos la mascara de señal de stop (detectamos el rojo)
-                    img_intermedia_stop = cv.imread(img_path_directory )
+                    img_intermedia_stop = cv.imread(img_path_directory, 1)
                     img_intermedia_stop_copy=img_intermedia_stop[y1:y2, x1:x2] 
                     img_intermedia_stop_copy = cv.cvtColor(img_intermedia_stop_copy, cv.COLOR_BGR2HSV)
                     img_intermedia_stop_copy = resize_img_25_25(img_intermedia_stop_copy)
@@ -355,18 +314,18 @@ def main():
             DETECTOR = valor_opcion
 
 
-
+    """
     # Creamos el fichero resultado siempre, para borrar si existiera una version anterior
     crear_fichero_restultado()
 
-    # Eliminamos la carpeta rois si existe
+    # Eliminamos el directorio rois si existe
     if os.path.exists('rois'):
         shutil.rmtree('rois')
 
-    # Creamos un fichero temporal rois
+    # Creamos un directorio temporal rois
     if not os.path.exists('rois'):
         os.makedirs('rois')
-     """
+
     TRAIN_PATH="./train"
     TEST_PATH="./train_10_ejemplos"
     # Orden de los parametros del constructor
@@ -379,10 +338,9 @@ def main():
     image_clasification_finished = False
     """"""
     while not image_clasification_finished:
-    
-        # get_mean_image_masks()
-    
-        file_names = [file for file in os.listdir(TEST_PATH) if not file.endswith(".DS_Store") and file.endswith(".ppm")]
+
+        extensions = ['jpg', 'png', 'bmp', 'jpeg', 'ppm']
+        file_names = [file for file in os.listdir(TEST_PATH) if not file.endswith(".DS_Store") and any(file.endswith(extension) for extension in extensions)]
     
         img_list = []
     
@@ -394,11 +352,21 @@ def main():
             print(image)
             # Cargamos la imagen en color
             img = cv.imread(image, 1)
+
+            # Preprocesamos la imagen y restamos al canal rojo, el verde y el azul, para que evite bboxes que no tengan rojo
+
+            canal_azul = np.array(img[:, :, 0])
+            canal_verde = np.array(img[:, :, 1])
+            canal_rojo = np.array(img[:, :, 2])
+
+            imagen_sin_azul = cv.absdiff(canal_rojo, canal_azul)
+            imagen_rojos = cv.absdiff(imagen_sin_azul, canal_verde)
+            cv.imshow("diferencia", imagen_rojos)
     
-            imgGray =img#cv.cvtColor(img, cv.COLOR_BGR2GRAY)
+            imgGray = img.copy() # cv.cvtColor(img, cv.COLOR_BGR2GRAY)
     
             # Guardamos las Bounding Boxes de la imagen -> (x1,y1) y ancho y alto
-            regions, bboxes = mser.detectRegions(imgGray)
+            regions, bboxes = mser.detectRegions(imagen_rojos)
     
             # hulls son todos los contornos, y convexHull nos da el contorno cerrado de una region convexa
             # con reshape, cambiamos las dimensiones de la matriz sin alterar su contenido
@@ -407,8 +375,8 @@ def main():
             hulls = [cv.convexHull(p.reshape(-1, 1, 2)) for p in filtered_bboxes]
             cv.polylines(imgGray, hulls, 1, (0, 255, 0))
             
-            cv.imwrite("./poli/" + image.split("/")[2] , imgGray.astype(np.uint8))
-            cv.imshow("imfff",imgGray)
+            cv.imwrite("./poli/" + image.split("/")[2], imgGray.astype(np.uint8))
+            cv.imshow("imfff", imgGray)
             
     
             # guardamos los rois (recortes) detectados en una carpeta
@@ -463,13 +431,18 @@ def main():
             corr_prohibicion = correlate_masks(signal_mask_prohibicion, masks[0])
             corr_peligro = correlate_masks(signal_mask_peligro, masks[1])
             corr_stop = correlate_masks(signal_mask_stop, masks[2])
-            
+
+
+            # tipos de señal: 0 => prohibicion, 1 => peligro, 2 => stop
             if (corr_prohibicion > corr_peligro) & (corr_prohibicion > corr_stop):
-                write_signal_to_results(str(nombre_img) + ";" + "0" + ";" + str(corr_prohibicion))
+                if corr_prohibicion > 0.2:
+                    write_signal_to_results(str(nombre_img) + ";" + "0" + ";" + str(corr_prohibicion))
             elif (corr_peligro > corr_prohibicion) & (corr_peligro > corr_stop):
-                write_signal_to_results(str(nombre_img) + ";" + "1" + ";" + str(corr_prohibicion))
+                if corr_peligro > 0.2:
+                    write_signal_to_results(str(nombre_img) + ";" + "1" + ";" + str(corr_peligro))
             elif (corr_stop > corr_prohibicion) & (corr_stop > corr_peligro):
-                write_signal_to_results(str(nombre_img) + ";" + "2" + ";" + str(corr_prohibicion))
+                if corr_stop > 0.2:
+                    write_signal_to_results(str(nombre_img) + ";" + "2" + ";" + str(corr_stop))
     
             print(nombre_img + "(prohibicion): " + str(corr_prohibicion))
             print(nombre_img + "(peligro): " + str(corr_peligro))
