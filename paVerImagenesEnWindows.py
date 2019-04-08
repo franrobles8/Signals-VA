@@ -6,7 +6,7 @@ Created on Wed Apr  3 12:10:12 2019
 """
 import cv2 as cv
 while True:
-    m= cv.imread('./recortes_prueba/00047.ppm')
+    m= cv.imread('./poli/00003.ppm')
    
     cv.imshow('m', m)
     """
