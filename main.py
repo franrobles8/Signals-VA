@@ -364,7 +364,12 @@ def main():
             print(nombre_img + "(peligro): " + str(corr_peligro))
             print(nombre_img + "(stop): " + str(corr_stop))
             print("----------")
-    
+
+        # Eliminamos el directorio rois si existe
+        if os.path.exists('rois'):
+            shutil.rmtree('rois')
+
+        print("Resultados obtenidos -> resultado.txt")
            
     
         # Cerramos la ventana presionando escape
