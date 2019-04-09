@@ -6,16 +6,6 @@ import sys
 import getopt
 import shutil
 
-
-def transform_to_points(bboxes):
-    bboxesPuntos = []
-
-    for b in bboxes:
-        bboxesPuntos.append(get_formatted_point(b))
-
-    return bboxesPuntos
-
-
 def get_formatted_point(oldFormatRectangle):
 
     # Creamos los puntos con los datos obtenidos de los bboxes en formato [x ,y , ancho, alto]
